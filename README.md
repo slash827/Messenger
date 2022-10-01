@@ -10,3 +10,14 @@ In order to transfer the symmetric keys between the clients, there is also an as
 I also used **SQLite database** in the server side in order to store relevant information about the clients that are registered to the server.
 The c++ project is dependent on the libraries **boost** and **cryptopp**.</br>
 Server side and client side contains each approximately 700 lines of code.
+
+What could be done in this application?
+A client can: </br>
+<ol>
+<li>register to the server via a registration request.</li>
+<li>send the server it's public key so that anyone can have the oppurtunity to communicate with him securely.</li>
+<li>request from the server all the messages that were sent to him.</li>
+<li>request a symmetric key from a specific client (in order to start messageing him securely).</li>
+<li>send a symmetric key for a specific client.</li>
+<li>send a message.</li>
+</ol?
