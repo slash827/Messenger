@@ -11,8 +11,7 @@ I also used **SQLite database** in the server side in order to store relevant in
 The c++ project is dependent on the libraries **boost** and **cryptopp**.</br>
 Server side and client side contains each approximately 700 lines of code.
 
-What could be done in this application?
-A client can: </br>
+A client can request the following from the server: </br>
 <ol>
 <li>register to the server via a registration request.</li>
 <li>send the server it's public key so that anyone can have the oppurtunity to communicate with him securely.</li>
