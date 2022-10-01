@@ -5,4 +5,4 @@ The messages between clients are encrypted from end to end using a symmetric enc
 In order to transfer the symmetric keys between the clients, there is also an asymmetric enctyption using the **RSA encryption protocol**. </br>
 I also used **SQLite database** in the server side in order to store relevant information about the clients that are registered to the server.
 The c++ project is dependent on the libraries **boost** and **cryptopp**.</br>
-
+Server side and client side contains each approximately 700 lines of code.
