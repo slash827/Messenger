@@ -16,7 +16,7 @@ A client can request the following from the server: </br>
 <li>Register to the server via a registration request.</li>
 <li>Send the server it's public key so that anyone can have the oppurtunity to communicate with him securely.</li>
 <li>Request from the server all the messages that were sent to him.</li>
-<li>Request a symmetric key from a specific client (in order to start messageing him securely).</li>
+<li>Request a symmetric key from a specific client (in order to start messaging him securely).</li>
 <li>Send a symmetric key for a specific client.</li>
 <li>Send a message.</li>
 </ol>
