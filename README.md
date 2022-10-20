@@ -1,4 +1,4 @@
-# MessageU - Client Server application with Python and C++
+# Messenger - Client Server application with Python and C++
 This project contains a client software that is used to send encrypted messages between clients on different computers using a model of client-server. </br> 
 
 The **client side** is written in **C++** and has a Command line interface. </br> 
