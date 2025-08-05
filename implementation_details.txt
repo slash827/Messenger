@@ -1,0 +1,186 @@
+## Project Documentation: Encrypted Client-Server Messaging System
+
+This document provides a detailed explanation of the implementation of the encrypted client-server messaging system. It covers both the Python-based server and the C++ client, with a focus on complex C++ concepts, network objects, and memory management.
+
+### **Server-Side Implementation (Python)**
+
+The server is built in Python and uses a combination of standard libraries for networking and a custom-built module for database access.
+
+#### **`main_server.py`**
+
+The entry point for the server application. It is responsible for:
+
+-   **Initialization**: Reads the port number from `port.info`, creates a `selectors.DefaultSelector` for handling multiple connections, and sets up a non-blocking TCP socket.
+-   **Connection Handling**:
+    -   `accept_wrapper`: This function is called when a new client tries to connect. It accepts the connection, sets the new socket to non-blocking mode, and registers it with the selector to monitor for read and write events.
+    -   `service_connection`: This function is the core of the server's request handling. It's called when a registered client socket has data to be read or is ready to be written to.
+        -   It reads the request header to determine the payload size.
+        -   It calls `request_processor.request_identify` to process the incoming request.
+        -   It sends the response back to the client.
+        -   It handles closing the connection.
+
+#### **`request_processor.py`**
+
+This module is responsible for interpreting and processing all requests from the client.
+
+-   **`request_identify`**: This is the main function that orchestrates request processing. It unpacks the request header, validates the client version, and then calls the appropriate function based on the request `code`.
+-   **Request Handling Functions**:
+    -   `register_client`: Handles new user registration. It checks if the username is already taken, generates a new client ID, and stores the client's information (name, public key) in the database.
+    -   `get_clients_list`: Retrieves a list of all registered clients from the database, excluding the requesting client.
+    -   `get_public_key`: Fetches the public key of a specific client from the database.
+    -   `identify_message`: This function further processes messages sent from a client. It distinguishes between different message types (e.g., asking for a symmetric key, sending a symmetric key, sending a text message) and adds them to the `messages` table in the database to be pulled by the recipient client.
+    -   `pull_messages`: Retrieves all pending messages for a specific client from the database.
+
+#### **`db_access.py`**
+
+This module provides an abstraction layer for interacting with the SQLite database (`server.db`).
+
+-   **`DataBase_Access` Class**: A singleton class that manages the database connection and cursor.
+    -   It creates the `clients` and `messages` tables if they don't exist.
+    -   It provides methods to `add_client`, `get_client`, `get_all_clients_info_except`, `get_client_public_key`, `add_message`, and `remove_messages_for_client`.
+-   **`Client_Record` and `Message_Record` Classes**: These are simple data classes used to structure the data retrieved from the database in a more readable and Pythonic way.
+
+#### **Method Details**
+
+-   **`DataBase_Access.__init__(self)`**: Constructor for the database access class. It connects to the `server.db` file, creates the `clients` and `messages` tables if they don't already exist, and initializes a cursor for executing SQL commands.
+-   **`DataBase_Access.get_client(self, client_id)`**: Retrieves a single client's record from the database based on their ID.
+-   **`DataBase_Access.add_client(self, client_record)`**: Adds a new client record to the `clients` table.
+-   **`DataBase_Access.get_all_clients_info_except(self, client_id)`**: Fetches the ID and name of all clients in the database except for the one with the specified `client_id`.
+-   **`DataBase_Access.get_client_public_key(self, client_id)`**: Retrieves the public key for a specific client.
+-   **`DataBase_Access.add_message(self, message: Message_Record)`**: Adds a new message record to the `messages` table.
+-   **`DataBase_Access.remove_messages_for_client(self, client_id)`**: Retrieves all messages for a given client and then deletes them from the `messages` table.
+
+---
+
+### **Client-Side Implementation (C++)**
+
+The client is a command-line application written in C++. It uses the Boost.Asio library for networking and Crypto++ for encryption. This section provides a deep dive into the files and C++ concepts used.
+
+#### **`main_client.cpp`**
+
+This file serves as the entry point for the client application and manages the main application loop.
+
+-   **`main()` function**:
+    -   Initializes crucial Boost.Asio objects: `asio::io_context` (the core I/O engine), `tcp::socket` (for communication), and `tcp::resolver` (to find the server endpoint).
+    -   These objects are wrapped in a `Connection` struct and passed by pointer to functions that need them, avoiding unnecessary copies.
+    -   A `try-catch` block is used to handle any exceptions that might occur during the client's execution, preventing abrupt crashes.
+    -   Calls `get_client_requests()` to start the primary logic of the application.
+
+-   **`get_client_requests()`**:
+    -   Manages the client's session from start to finish.
+    -   It initializes a `ClientInfo` object for the current user and a `map<string, ClientInfo>` to store information about other clients retrieved from the server.
+    -   It first calls `get_address_and_port()` to get the server's connection details from a local file.
+    -   It then enters a `do-while` loop that constitutes the main lifecycle of the client, repeatedly processing user requests until they choose to exit (by returning `FINISH_PROGRAM`).
+
+-   **`fill_one_request()`**:
+    -   Handles a single, complete request-response cycle with the server.
+    -   It checks if the user is already registered by calling `is_registered()` and loads their info from a file if they are.
+    -   `display_menu()` shows the user the available actions.
+    -   `identify_request_type()` is called to process the user's menu choice and build the corresponding request payload.
+    -   `connect_to_server()` establishes the TCP connection.
+    -   `send_and_receive()` sends the prepared request and blocks until a response is received.
+    -   `identify_response()` is called to parse and handle the server's response.
+
+-   **`release_resources()`**:
+    -   A critical function for resource management.
+    -   It properly shuts down and closes the `tcp::socket` to terminate the connection gracefully.
+    -   It deallocates the memory for `response_payload` using `delete[]`, which was dynamically allocated in `send_and_receive`. This is a key part of manual memory management in C++ and prevents memory leaks.
+
+#### **Method Details**
+
+-   **`main()`**: The entry point of the program. Initializes Asio objects and starts the client request loop.
+-   **`get_client_requests(Connection *connect)`**: Manages the main loop of the client, handling user requests until the program is terminated.
+-   **`fill_one_request(Connection* connect, map<string, ClientInfo> *all_clients, ClientInfo *this_client, uint8_t* response_payload)`**: Handles a single user request, from displaying the menu to processing the server's response.
+-   **`release_resources(tcp::socket* socket, uint8_t* response_payload)`**: Gracefully closes the socket connection and frees dynamically allocated memory for the response payload.
+
+#### **Complex C++ Concepts in Detail**
+
+-   **Pointers and Manual Memory Management**:
+    -   The client-side code makes extensive use of raw pointers (e.g., `tcp::socket*`, `uint8_t* response_payload`). This is a fundamental C++ concept that allows for efficient, low-level control over memory.
+    -   Pointers are used to pass large objects like the `Connection` struct or the socket without copying them, and to handle dynamically sized data received from the server.
+    -   The use of `new[]` and `delete[]` for the response payload is a classic example of manual memory management. The programmer is responsible for allocating memory when the size is known at runtime and for freeing it when it's no longer needed.
+
+-   **Boost.Asio Network Objects**:
+    -   `asio::io_context`: The central object in Asio, it runs the event loop that handles asynchronous operations.
+    -   `tcp::socket`: Represents a network socket and provides methods for connecting, sending, and receiving data.
+    -   `tcp::resolver`: A utility that converts a human-readable hostname and port (like "localhost" and "1234") into a specific endpoint the socket can connect to.
+
+-   **Structs and Data Serialization (`#pragma pack(push, 1)`)**:
+    -   Structs like `Request`, `Response`, and `ClientInfo` are defined to mirror the exact data layout expected by the server.
+    -   `#pragma pack(push, 1)` is a compiler directive essential for networking. It forces the compiler to align struct members on 1-byte boundaries, eliminating any padding. This ensures that the binary representation of the struct in the C++ client is identical to what the Python server expects, preventing data corruption.
+
+#### **`connect_to_server.cpp` / `.h`**
+
+-   **`Connection` struct**: A simple but effective way to bundle all networking-related objects and data (`io_context`, `socket`, `resolver`, address, and port) into a single unit that can be easily passed between functions.
+-   **`connect_to_server()`**: This function orchestrates the connection process by using the `resolver` to find the server and then calling `boost::asio::connect`, which attempts to establish a TCP connection to the resolved endpoint.
+-   **`send_and_receive()`**: This function implements the core communication protocol.
+    1.  It first sends the fixed-size `Request` header struct.
+    2.  It then sends the variable-length payload, carefully handling cases where the entire buffer might not be sent in a single `socket->send()` call.
+    3.  It then blocks while waiting to receive the fixed-size `Response` header from the server.
+    4.  If the response header indicates a payload is attached (`response->payload_size > 0`), it dynamically allocates a buffer of the appropriate size using `new uint8_t[]`.
+    5.  It receives the payload data into this new buffer, again handling partial reads.
+    6.  It returns the raw pointer to the payload buffer. The calling function (`fill_one_request`) is now responsible for freeing this memory.
+
+#### **Method Details**
+
+-   **`connect_to_server(Connection* connect)`**: Establishes a TCP connection to the server using the provided address and port.
+-   **`send_and_receive(Request* req, tcp::socket* socket, string* payload, Response* response)`**: Sends a request (header and payload) to the server and receives a response (header and payload). It handles dynamic memory allocation for the response payload.
+
+#### **`request_handler.cpp` / `.h`**
+
+-   This module is the "brain" of the client's logic, responsible for translating user actions into network requests.
+-   **`identify_request_type()`**: A large function that contains a `switch` statement to handle the user's menu selection. It populates the `Request` struct and the `payload` string accordingly.
+-   **Request Building Functions**:
+    -   **`register_client_request()`**: Prompts the user for a name, calls `generate_asymmetric_keys()` to create a new RSA key pair, and then packs the user's name and public key into the request payload.
+    -   **`send_symmetric_key_request()`**: Generates a new AES symmetric key, encrypts it with the recipient's public RSA key, and packs it into a message payload.
+    -   **`send_text_message_request()`**: Takes text input from the user, encrypts it using the previously established shared symmetric key, and packs it into a message payload.
+
+#### **Method Details**
+
+-   **`identify_request_type(Request* request, string* payload, ClientInfo* this_client, map<string, ClientInfo>* all_clients)`**: The main function for handling user input. It displays a menu and calls the appropriate function to build the request based on the user's choice.
+-   **`register_client_request(Request* request, string* payload, ClientInfo* this_client)`**: Constructs a request to register a new client, including generating and packing the public key.
+-   **`get_public_key_request(Request* request, string* payload, map<string, ClientInfo>* all_clients)`**: Builds a request to fetch the public key of another client.
+-   **`send_message_request(Request* request, string* payload, map<string, ClientInfo>* all_clients)`**: Constructs a request to send a message, which can be a symmetric key request, a symmetric key answer, or an encrypted text message.
+-   **`display_menu()`**: Prints the main menu of options to the console for the user.
+-   **`error_displayer(int error_code)`**: Displays a user-friendly error message based on an internal error code.
+
+#### **`response_handler.cpp` / `.h`**
+
+-   This module is responsible for parsing and acting on the data received from the server.
+-   **`identify_response()`**: Contains a `switch` statement that reads the `code` from the `Response` header and calls the appropriate handler function.
+-   **Response Handling Functions**:
+    -   **`handle_get_clients()`**: Receives a buffer containing a list of other clients. It iterates through this buffer, deserializing each client's ID and name, and populates the `all_clients` map.
+    -   **`handle_get_public_key()`**: Finds the relevant client in the `all_clients` map and updates their `public_key` field with the key from the response payload.
+    -   **`handle_pulling_messages()`**: This is the most complex handler. It receives a buffer containing one or more messages. It loops through the buffer, deserializing each message and its specific content.
+        -   If it's a symmetric key request, it prompts the user to respond.
+        -   If it's an encrypted symmetric key, it uses the client's private RSA key to decrypt it and stores it in the `all_clients` map for future use.
+        -   If it's an encrypted text message, it uses the appropriate symmetric key to decrypt it and displays the plaintext to the user.
+
+#### **Method Details**
+
+-   **`identify_response(Response* response, uint8_t* response_payload, string* username, map<string, ClientInfo>* all_clients, ClientInfo* this_client)`**: The main function for parsing server responses. It uses a switch statement on the response code to call the appropriate handler.
+-   **`handle_registration(ClientInfo* this_client, uint8_t* response_payload, string *username)`**: Handles a successful registration response by saving the new client ID to the `me.info` file.
+-   **`handle_get_clients(Response *response ,map<string, ClientInfo> *all_clients, uint8_t *response_payload)`**: Parses the payload of a client list response and populates the `all_clients` map.
+-   **`handle_get_public_key(map<string, ClientInfo> *all_clients, uint8_t *response_payload)`**: Parses the payload of a public key response and updates the corresponding client's public key in the `all_clients` map.
+-   **`handle_pulling_messages(Response* response, map<string, ClientInfo>* all_clients, uint8_t* response_payload, ClientInfo* this_client)`**: Handles the complex logic of parsing and processing incoming messages, including decryption of both symmetric keys and text messages.
+
+#### **`encryptions.cpp` / `.h`**
+
+-   This module isolates all cryptographic functionality using the Crypto++ library.
+-   **Asymmetric Encryption (RSA)**:
+    -   `generate_asymmetric_keys()`: Uses Crypto++'s `InvertibleRSAFunction` to create a private key and derives the corresponding public key. The keys are Base64 encoded to be stored and transmitted as strings.
+    -   `asymmetric_encypt`/`asymmetric_decrypt`: These functions handle the RSA encryption/decryption using the OAEP padding scheme for enhanced security. This is used exclusively for the secure exchange of symmetric keys.
+-   **Symmetric Encryption (AES)**:
+    -   `symmetric_key_create()`: Generates a cryptographically secure 128-bit (16-byte) AES key.
+    -   `encrypt_symmetric`/`decrypt_symmetric`: These functions perform the AES encryption/decryption in CBC (Cipher Block Chaining) mode. This is used for encrypting all text messages between clients.
+
+#### **Method Details**
+
+-   **`generate_asymmetric_keys(string* private_key, uint8_t* public_key)`**: Generates a 1024-bit RSA key pair and stores the private key (Base64 encoded) and public key.
+-   **`asymmetric_encypt(const string& message, uint8_t *public_key)`**: Encrypts a message using the provided RSA public key.
+-   **`asymmetric_decrypt(const string& cipher_message, string* private_key)`**: Decrypts a ciphertext using the provided RSA private key.
+-   **`symmetric_key_create(string *symmetric_key)`**: Generates a random 16-byte (128-bit) symmetric key for AES encryption.
+-   **`encrypt_symmetric(const string& message, const string& symmetric_key)`**: Encrypts a message using AES in CBC mode with the provided symmetric key.
+-   **`decrypt_symmetric(const string& cipher_message, const string& symmetric_key)`**: Decrypts a ciphertext using AES in CBC mode with the provided symmetric key.
+
+This detailed breakdown should provide a clear understanding of the project's architecture and implementation, helping you to refresh your memory on these technologies.
